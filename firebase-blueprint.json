@@ -1,0 +1,378 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "Authenticated university student profile stored in the profiles collection without PII.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "nickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "university": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "department": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "mannerTemp": {
+          "type": "number"
+        },
+        "sellingCount": {
+          "type": "number"
+        },
+        "completedCount": {
+          "type": "number"
+        },
+        "reviewCount": {
+          "type": "number"
+        },
+        "avatarUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "isStudentVerified": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "nickname",
+        "university",
+        "department",
+        "mannerTemp",
+        "sellingCount",
+        "completedCount",
+        "reviewCount",
+        "isStudentVerified",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Secondhand marketplace listing posted by a verified university student.",
+      "type": "object",
+      "properties": {
+        "sellerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sellerNickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "sellerDepartment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "sellerUniversity": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "sellerMannerTemp": {
+          "type": "number"
+        },
+        "sellerAvatarUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "sellerVerified": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "category": {
+          "type": "string",
+          "enum": ["전공서적", "전자기기", "자취/기숙사", "의류/잡화"]
+        },
+        "price": {
+          "type": "number"
+        },
+        "originalPrice": {
+          "type": "number"
+        },
+        "isFree": {
+          "type": "boolean"
+        },
+        "allowPriceOffer": {
+          "type": "boolean"
+        },
+        "safeZone": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "safeZoneDetail": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "imageUrls": {
+          "type": "array",
+          "description": "Up to 10 public image URLs from product-images storage"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["판매중", "예약중", "거래완료"]
+        },
+        "badge": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "hashtags": {
+          "type": "array",
+          "description": "Up to 10 short Korean hashtags"
+        },
+        "likesCount": {
+          "type": "number"
+        },
+        "chatsCount": {
+          "type": "number"
+        },
+        "viewsCount": {
+          "type": "number"
+        },
+        "isPublic": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "sellerId",
+        "sellerNickname",
+        "sellerDepartment",
+        "sellerUniversity",
+        "sellerMannerTemp",
+        "sellerVerified",
+        "title",
+        "category",
+        "price",
+        "isFree",
+        "allowPriceOffer",
+        "safeZone",
+        "description",
+        "imageUrls",
+        "status",
+        "likesCount",
+        "chatsCount",
+        "viewsCount",
+        "isPublic",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Wishlist": {
+      "title": "Wishlist",
+      "description": "User-saved favorite product record.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "productId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "productTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "productPrice": {
+          "type": "number"
+        },
+        "productImageUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "productSafeZone": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "productCategory": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "isSample": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "productId",
+        "productTitle",
+        "productPrice",
+        "productImageUrl",
+        "productSafeZone",
+        "productCategory",
+        "isSample",
+        "createdAt"
+      ]
+    },
+    "MeetupRequest": {
+      "title": "MeetupRequest",
+      "description": "Safe-zone direct transaction meetup proposal between buyer and seller.",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "productTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "productPrice": {
+          "type": "number"
+        },
+        "productImageUrl": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "buyerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "buyerNickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "buyerDepartment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "sellerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "sellerNickname": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "university": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "safeZone": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "preferredDate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "preferredTime": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "status": {
+          "type": "string",
+          "enum": ["요청됨", "수락됨", "거절됨", "완료됨"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "productId",
+        "productTitle",
+        "productPrice",
+        "productImageUrl",
+        "buyerId",
+        "buyerNickname",
+        "buyerDepartment",
+        "sellerId",
+        "sellerNickname",
+        "university",
+        "safeZone",
+        "preferredDate",
+        "preferredTime",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/profiles/{userId}": {
+      "schema": { "$ref": "#/entities/Profile" },
+      "description": "Student profile documents keyed by Firebase Auth UID."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Public campus secondhand product listings."
+    },
+    "/wishlists/{wishlistId}": {
+      "schema": { "$ref": "#/entities/Wishlist" },
+      "description": "Per-user liked/wishlisted products keyed by {userId}_{productId}."
+    },
+    "/meetup_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/MeetupRequest" },
+      "description": "Direct campus safe-zone meetup proposals."
+    }
+  }
+}

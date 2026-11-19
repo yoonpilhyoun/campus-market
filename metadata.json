@@ -1,0 +1,6 @@
+{
+  "name": "캠퍼스마켓",
+  "description": "대학생을 위한 교내 안심 직거래 중고 마켓플레이스 - 전공서적, 전자기기, 자취/기숙사 용품을 캠퍼스 안심존에서 안전하게 거래하세요.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

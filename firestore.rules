@@ -1,0 +1,299 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Profile Validation Blueprint
+    function isValidProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'nickname', 'university', 'department',
+          'mannerTemp', 'sellingCount', 'completedCount',
+          'reviewCount', 'isStudentVerified', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'nickname', 'university', 'department',
+          'mannerTemp', 'sellingCount', 'completedCount',
+          'reviewCount', 'avatarUrl', 'isStudentVerified',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.nickname is string && data.nickname.size() >= 1 && data.nickname.size() <= 30
+        && data.university is string && data.university.size() >= 2 && data.university.size() <= 60
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 60
+        && data.mannerTemp is number && data.mannerTemp >= 0 && data.mannerTemp <= 100
+        && data.sellingCount is number && data.sellingCount >= 0 && data.sellingCount <= 10000
+        && data.completedCount is number && data.completedCount >= 0 && data.completedCount <= 10000
+        && data.reviewCount is number && data.reviewCount >= 0 && data.reviewCount <= 10000
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000))
+        && data.isStudentVerified is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Product Validation Blueprint
+    function isValidProduct(data) {
+      return data.keys().hasAll([
+          'sellerId', 'sellerNickname', 'sellerDepartment', 'sellerUniversity',
+          'sellerMannerTemp', 'sellerVerified', 'title', 'category', 'price',
+          'isFree', 'allowPriceOffer', 'safeZone', 'description', 'imageUrls',
+          'status', 'likesCount', 'chatsCount', 'viewsCount', 'isPublic',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'sellerId', 'sellerNickname', 'sellerDepartment', 'sellerUniversity',
+          'sellerMannerTemp', 'sellerAvatarUrl', 'sellerVerified', 'title',
+          'category', 'price', 'originalPrice', 'isFree', 'allowPriceOffer',
+          'safeZone', 'safeZoneDetail', 'description', 'imageUrls', 'status',
+          'badge', 'hashtags', 'likesCount', 'chatsCount', 'viewsCount',
+          'isPublic', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.sellerId)
+        && data.sellerNickname is string && data.sellerNickname.size() >= 1 && data.sellerNickname.size() <= 30
+        && data.sellerDepartment is string && data.sellerDepartment.size() >= 1 && data.sellerDepartment.size() <= 60
+        && data.sellerUniversity is string && data.sellerUniversity.size() >= 2 && data.sellerUniversity.size() <= 60
+        && data.sellerMannerTemp is number && data.sellerMannerTemp >= 0 && data.sellerMannerTemp <= 100
+        && (!('sellerAvatarUrl' in data) || (data.sellerAvatarUrl is string && data.sellerAvatarUrl.size() <= 1000))
+        && data.sellerVerified is bool
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 100
+        && data.category in ['전공서적', '전자기기', '자취/기숙사', '의류/잡화']
+        && data.price is number && data.price >= 0 && data.price <= 100000000
+        && (!('originalPrice' in data) || (data.originalPrice is number && data.originalPrice >= 0 && data.originalPrice <= 100000000))
+        && data.isFree is bool
+        && data.allowPriceOffer is bool
+        && data.safeZone is string && data.safeZone.size() >= 2 && data.safeZone.size() <= 60
+        && (!('safeZoneDetail' in data) || (data.safeZoneDetail is string && data.safeZoneDetail.size() <= 120))
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 1000
+        && data.imageUrls is list && data.imageUrls.size() >= 1 && data.imageUrls.size() <= 10
+        && data.imageUrls[0] is string && data.imageUrls[0].size() <= 1000
+        && data.status in ['판매중', '예약중', '거래완료']
+        && (!('badge' in data) || (data.badge is string && data.badge.size() <= 20))
+        && (!('hashtags' in data) || (data.hashtags is list && data.hashtags.size() <= 10 && (data.hashtags.size() == 0 || data.hashtags[0] is string)))
+        && data.likesCount is number && data.likesCount >= 0 && data.likesCount <= 1000000
+        && data.chatsCount is number && data.chatsCount >= 0 && data.chatsCount <= 1000000
+        && data.viewsCount is number && data.viewsCount >= 0 && data.viewsCount <= 10000000
+        && data.isPublic is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Wishlist Validation Blueprint
+    function isValidWishlist(data) {
+      return data.keys().hasAll([
+          'userId', 'productId', 'productTitle', 'productPrice',
+          'productImageUrl', 'productSafeZone', 'productCategory',
+          'isSample', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'productId', 'productTitle', 'productPrice',
+          'productImageUrl', 'productSafeZone', 'productCategory',
+          'isSample', 'createdAt'
+        ])
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && isValidId(data.productId)
+        && data.productTitle is string && data.productTitle.size() >= 1 && data.productTitle.size() <= 100
+        && data.productPrice is number && data.productPrice >= 0 && data.productPrice <= 100000000
+        && data.productImageUrl is string && data.productImageUrl.size() <= 1000
+        && data.productSafeZone is string && data.productSafeZone.size() <= 60
+        && data.productCategory is string && data.productCategory.size() <= 30
+        && data.isSample is bool
+        && data.createdAt is timestamp;
+    }
+
+    // Meetup Request Validation Blueprint
+    function isValidMeetupRequest(data) {
+      return data.keys().hasAll([
+          'productId', 'productTitle', 'productPrice', 'productImageUrl',
+          'buyerId', 'buyerNickname', 'buyerDepartment',
+          'sellerId', 'sellerNickname', 'university', 'safeZone',
+          'preferredDate', 'preferredTime', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'productId', 'productTitle', 'productPrice', 'productImageUrl',
+          'buyerId', 'buyerNickname', 'buyerDepartment',
+          'sellerId', 'sellerNickname', 'university', 'safeZone',
+          'preferredDate', 'preferredTime', 'note', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.productId)
+        && data.productTitle is string && data.productTitle.size() >= 1 && data.productTitle.size() <= 100
+        && data.productPrice is number && data.productPrice >= 0 && data.productPrice <= 100000000
+        && data.productImageUrl is string && data.productImageUrl.size() <= 1000
+        && isValidId(data.buyerId)
+        && data.buyerNickname is string && data.buyerNickname.size() >= 1 && data.buyerNickname.size() <= 30
+        && data.buyerDepartment is string && data.buyerDepartment.size() >= 1 && data.buyerDepartment.size() <= 60
+        && isValidId(data.sellerId)
+        && data.sellerNickname is string && data.sellerNickname.size() >= 1 && data.sellerNickname.size() <= 30
+        && data.university is string && data.university.size() >= 2 && data.university.size() <= 60
+        && data.safeZone is string && data.safeZone.size() >= 2 && data.safeZone.size() <= 60
+        && data.preferredDate is string && data.preferredDate.size() >= 1 && data.preferredDate.size() <= 30
+        && data.preferredTime is string && data.preferredTime.size() >= 1 && data.preferredTime.size() <= 30
+        && (!('note' in data) || (data.note is string && data.note.size() <= 300))
+        && data.status in ['요청됨', '수락됨', '거절됨', '완료됨']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // 1. Profiles Collection (Owner-only PII-free student profiles)
+    match /profiles/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if isSignedIn() && existing().uid == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidProfile(incoming())
+        && incoming().mannerTemp == 98.5
+        && incoming().sellingCount == 0
+        && incoming().completedCount == 0
+        && incoming().reviewCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().mannerTemp == existing().mannerTemp
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['nickname', 'university', 'department', 'avatarUrl', 'updatedAt'])
+          || incoming().diff(existing()).affectedKeys().hasOnly(['sellingCount', 'updatedAt'])
+          || incoming().diff(existing()).affectedKeys().hasOnly(['completedCount', 'sellingCount', 'updatedAt'])
+        );
+      allow delete: if false;
+    }
+
+    // 2. Products Collection (Public campus listings)
+    match /products/{productId} {
+      allow get: if isValidId(productId) && existing().isPublic == true;
+      allow list: if existing().isPublic == true;
+      allow create: if isValidId(productId)
+        && isSignedIn()
+        && isValidProduct(incoming())
+        && incoming().sellerId == request.auth.uid
+        && incoming().isPublic == true
+        && incoming().status == '판매중'
+        && incoming().likesCount == 0
+        && incoming().chatsCount == 0
+        && incoming().viewsCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(productId)
+        && isSignedIn()
+        && isValidProduct(incoming())
+        && existing().status != '거래완료'
+        && incoming().sellerId == existing().sellerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Seller edits listing details or status
+          (
+            existing().sellerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'category', 'price', 'originalPrice', 'isFree',
+              'allowPriceOffer', 'safeZone', 'safeZoneDetail', 'description',
+              'imageUrls', 'status', 'badge', 'hashtags', 'updatedAt'
+            ])
+          )
+          // Action 2: Authenticated user toggles like counter by +/-1
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'updatedAt'])
+            && (incoming().likesCount == existing().likesCount + 1 || incoming().likesCount == existing().likesCount - 1)
+          )
+          // Action 3: Authenticated user increments chatsCount on meetup request
+          || (
+            incoming().diff(existing()).affectedKeys().hasOnly(['chatsCount', 'updatedAt'])
+            && incoming().chatsCount == existing().chatsCount + 1
+          )
+        );
+      allow delete: if isValidId(productId)
+        && isSignedIn()
+        && existing().sellerId == request.auth.uid;
+    }
+
+    // 3. Wishlists Collection (Private per-user favorites)
+    match /wishlists/{wishlistId} {
+      allow get: if isValidId(wishlistId) && isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isValidId(wishlistId)
+        && isSignedIn()
+        && isValidWishlist(incoming())
+        && incoming().userId == request.auth.uid
+        && wishlistId == request.auth.uid + '_' + incoming().productId
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(wishlistId)
+        && isSignedIn()
+        && existing().userId == request.auth.uid;
+    }
+
+    // 4. Meetup Requests Collection (Direct transaction proposals)
+    match /meetup_requests/{requestId} {
+      allow get: if isValidId(requestId)
+        && isSignedIn()
+        && (existing().buyerId == request.auth.uid || existing().sellerId == request.auth.uid);
+      allow list: if isSignedIn()
+        && (existing().buyerId == request.auth.uid || existing().sellerId == request.auth.uid);
+      allow create: if isValidId(requestId)
+        && isSignedIn()
+        && isValidMeetupRequest(incoming())
+        && incoming().buyerId == request.auth.uid
+        && incoming().status == '요청됨'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(requestId)
+        && isSignedIn()
+        && isValidMeetupRequest(incoming())
+        && existing().status != '완료됨'
+        && existing().status != '거절됨'
+        && incoming().buyerId == existing().buyerId
+        && incoming().sellerId == existing().sellerId
+        && incoming().productId == existing().productId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Buyer cancels or marks completed
+          (
+            existing().buyerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && incoming().status in ['거절됨', '완료됨']
+          )
+          // Seller accepts, declines, or completes
+          || (
+            existing().sellerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && incoming().status in ['수락됨', '거절됨', '완료됨']
+          )
+        );
+      allow delete: if isValidId(requestId)
+        && isSignedIn()
+        && existing().buyerId == request.auth.uid
+        && existing().status == '요청됨';
+    }
+  }
+}
