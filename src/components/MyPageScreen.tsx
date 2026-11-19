@@ -20,7 +20,7 @@ import {
   updateMeetupRequestStatus,
   updateProductStatus,
   updateUserProfile,
-} from '../lib/firestoreService';
+} from '../lib/supabaseService';
 import {
   MeetupRequestRecord,
   MeetupStatus,
@@ -38,6 +38,8 @@ interface MyPageScreenProps {
   meetupRequests: MeetupRequestRecord[];
   onSelectProduct: (product: ProductItem) => void;
   onRemoveWishlist: (wishlist: WishlistRecord) => void;
+  onProfileUpdated: (profile: UserProfile) => void;
+  onRefreshData: () => void;
   onGoSell: () => void;
   onLogout: () => void;
   onShowToast: (msg: string, type?: 'success' | 'error') => void;
@@ -53,6 +55,8 @@ export function MyPageScreen({
   meetupRequests,
   onSelectProduct,
   onRemoveWishlist,
+  onProfileUpdated,
+  onRefreshData,
   onGoSell,
   onLogout,
   onShowToast,
@@ -72,11 +76,12 @@ export function MyPageScreen({
     }
     setSavingProfile(true);
     try {
-      await updateUserProfile(profile.uid, {
+      const updated = await updateUserProfile(profile.uid, {
         nickname: editNickname,
         university: editUniversity,
         department: editDepartment,
       });
+      onProfileUpdated(updated);
       setEditingProfile(false);
       onShowToast('프로필 정보가 수정되었습니다.');
     } catch {
@@ -89,6 +94,7 @@ export function MyPageScreen({
   const handleChangeProductStatus = async (product: ProductItem, nextStatus: ProductStatus) => {
     try {
       await updateProductStatus(product.id, nextStatus, profile);
+      onRefreshData();
       onShowToast(`상품 상태가 '${nextStatus}'으로 변경되었습니다.`);
     } catch {
       onShowToast('상태 변경 중 오류가 발생했습니다.', 'error');
@@ -98,6 +104,7 @@ export function MyPageScreen({
   const handleDeleteProduct = async (product: ProductItem) => {
     try {
       await deleteProductListing(product.id, profile);
+      onRefreshData();
       onShowToast('판매글이 삭제되었습니다.');
     } catch {
       onShowToast('삭제 중 오류가 발생했습니다.', 'error');
@@ -107,6 +114,7 @@ export function MyPageScreen({
   const handleMeetupAction = async (req: MeetupRequestRecord, nextStatus: MeetupStatus) => {
     try {
       await updateMeetupRequestStatus(req.id, nextStatus);
+      onRefreshData();
       const label =
         nextStatus === '수락됨'
           ? '직거래 약속을 수락했습니다!'

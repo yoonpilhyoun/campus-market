@@ -19,9 +19,9 @@ import {
   X,
 } from 'lucide-react';
 import { ASSET_IMAGES, CAMPUSES } from '../data/sampleData';
-import { uploadProductImage } from '../lib/firebase';
-import { createProductListing } from '../lib/firestoreService';
-import { ProductCategory, UserProfile } from '../types';
+import { uploadProductImageToSupabase } from '../lib/supabase';
+import { createProductListing } from '../lib/supabaseService';
+import { ProductCategory, ProductItem, UserProfile } from '../types';
 import { CampusMapCard } from './CampusMapCard';
 
 interface UploadedPhoto {
@@ -35,7 +35,7 @@ interface UploadedPhoto {
 interface SellScreenProps {
   profile: UserProfile;
   onBack: () => void;
-  onSuccess: () => void;
+  onSuccess: (created: ProductItem) => void;
   onShowToast: (msg: string, type?: 'success' | 'error') => void;
 }
 
@@ -88,7 +88,7 @@ export function SellScreen({ profile, onBack, onSuccess, onShowToast }: SellScre
       filesToUpload.map(async (file, idx) => {
         const targetId = placeholders[idx].id;
         try {
-          const uploadedUrl = await uploadProductImage(file, profile.uid);
+          const uploadedUrl = await uploadProductImageToSupabase(file, profile.uid);
           setPhotos((prev) =>
             prev.map((item) =>
               item.id === targetId
@@ -105,7 +105,7 @@ export function SellScreen({ profile, onBack, onSuccess, onShowToast }: SellScre
                 : item
             )
           );
-          onShowToast('일부 사진 업로드에 실패했습니다. 다시 시도해 주세요.', 'error');
+          onShowToast(msg, 'error');
         }
       })
     );
@@ -167,7 +167,7 @@ export function SellScreen({ profile, onBack, onSuccess, onShowToast }: SellScre
 
     setSubmitting(true);
     try {
-      await createProductListing(profile, {
+      const created = await createProductListing(profile, {
         title: title.trim(),
         category,
         price: numericPrice,
@@ -180,10 +180,11 @@ export function SellScreen({ profile, onBack, onSuccess, onShowToast }: SellScre
       });
 
       onShowToast('상품이 캠퍼스마켓에 등록되었습니다!');
-      onSuccess();
+      onSuccess(created);
     } catch (err) {
       console.error(err);
-      onShowToast('상품 등록 중 오류가 발생했습니다. 다시 시도해 주세요.', 'error');
+      const msg = err instanceof Error ? err.message : '상품 등록 중 오류가 발생했습니다.';
+      onShowToast(msg, 'error');
     } finally {
       setSubmitting(false);
     }

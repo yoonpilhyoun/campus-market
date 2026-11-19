@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from './lib/supabase';
 import {
   createMeetupProposal,
-  createUserProfile,
+  fetchPublicProducts,
+  fetchUserMeetupRequests,
   fetchUserProfile,
+  fetchUserWishlists,
   subscribePublicProducts,
   subscribeUserMeetupRequests,
   subscribeUserProfile,
   subscribeUserWishlists,
   toggleUserWishlist,
-} from './lib/firestoreService';
+  upsertUserProfile,
+} from './lib/supabaseService';
 import { CAMPUSES, SAMPLE_PRODUCTS } from './data/sampleData';
 import {
   ActiveTab,
@@ -31,9 +34,9 @@ import { BottomNav } from './components/BottomNav';
 import { Toast } from './components/Toast';
 
 export default function App() {
-  // Auth & Profile state
+  // Supabase Auth & Profile state
   const [authReady, setAuthReady] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Navigation state
@@ -51,8 +54,8 @@ export default function App() {
   const [sortBy, setSortBy] = useState<SortOption>('최신순');
   const [verifiedOnly, setVerifiedOnly] = useState(true);
 
-  // Real-time Firestore collections
-  const [firestoreProducts, setFirestoreProducts] = useState<ProductItem[]>([]);
+  // Real-time Supabase tables
+  const [dbProducts, setDbProducts] = useState<ProductItem[]>([]);
   const [wishlists, setWishlists] = useState<WishlistRecord[]>([]);
   const [meetupRequests, setMeetupRequests] = useState<MeetupRequestRecord[]>([]);
 
@@ -71,10 +74,40 @@ export default function App() {
     }, 3000);
   }, []);
 
-  // Listen to Firebase Auth state
+  const refreshAllData = useCallback(
+    async (uid?: string) => {
+      const prods = await fetchPublicProducts();
+      setDbProducts(prods);
+      const targetUid = uid || authUser?.id;
+      if (targetUid) {
+        const [prof, wishes, meetups] = await Promise.all([
+          fetchUserProfile(targetUid),
+          fetchUserWishlists(targetUid),
+          fetchUserMeetupRequests(targetUid),
+        ]);
+        if (prof) setUserProfile(prof);
+        setWishlists(wishes);
+        setMeetupRequests(meetups);
+      }
+    },
+    [authUser?.id]
+  );
+
+  // Initialize & listen to Supabase Auth state
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setAuthUser(data.session?.user ?? null);
+      setAuthReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+      setAuthUser(user);
       if (!user) {
         setUserProfile(null);
         setWishlists([]);
@@ -82,37 +115,51 @@ export default function App() {
       }
       setAuthReady(true);
     });
-    return () => unsub();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Subscribe to public Firestore products in real time
+  // Subscribe to public Supabase `products` table in real time
   useEffect(() => {
     const unsub = subscribePublicProducts((items) => {
-      setFirestoreProducts(items);
+      setDbProducts(items);
     });
     return () => unsub();
   }, []);
 
-  // Subscribe to authenticated user's profile, wishlists, and meetup_requests
+  // Subscribe to authenticated user's profile, wishlists, and meetup_requests in real time
   useEffect(() => {
-    if (!firebaseUser) return;
-    const uid = firebaseUser.uid;
+    if (!authUser) return;
+    const uid = authUser.id;
 
     const unsubProfile = subscribeUserProfile(uid, async (prof) => {
       if (prof) {
         setUserProfile(prof);
       } else {
-        const existing = await fetchUserProfile(uid);
-        if (existing) {
-          setUserProfile(existing);
-        } else {
-          const created = await createUserProfile(uid, {
-            nickname: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '김민준',
-            university: CAMPUSES[0].name,
-            department: '컴퓨터공학과 24학번',
-            avatarUrl: firebaseUser.photoURL || undefined,
+        const meta = authUser.user_metadata || {};
+        try {
+          const created = await upsertUserProfile(uid, {
+            nickname: meta.nickname || authUser.email?.split('@')[0] || '김민준',
+            university: meta.university || CAMPUSES[0].name,
+            department: meta.department || '컴퓨터공학과 24학번',
           });
           setUserProfile(created);
+        } catch {
+          // Fallback local profile object if profiles table isn't created yet
+          setUserProfile({
+            uid,
+            nickname: meta.nickname || authUser.email?.split('@')[0] || '김민준',
+            university: meta.university || CAMPUSES[0].name,
+            department: meta.department || '컴퓨터공학과 24학번',
+            mannerTemp: 98.5,
+            sellingCount: 0,
+            completedCount: 0,
+            reviewCount: 0,
+            isStudentVerified: true,
+          });
         }
       }
     });
@@ -130,12 +177,12 @@ export default function App() {
       unsubWish();
       unsubMeetups();
     };
-  }, [firebaseUser]);
+  }, [authUser]);
 
-  // Combine user-posted Firestore products (always on top) + Korean sample items
+  // Combine real Supabase products (always at the top) + Korean sample products
   const allProducts = useMemo(() => {
-    return [...firestoreProducts, ...SAMPLE_PRODUCTS];
-  }, [firestoreProducts]);
+    return [...dbProducts, ...SAMPLE_PRODUCTS];
+  }, [dbProducts]);
 
   const selectedProduct = useMemo(() => {
     if (!selectedProductId) return null;
@@ -147,9 +194,9 @@ export default function App() {
   }, [wishlists]);
 
   const myProducts = useMemo(() => {
-    if (!firebaseUser) return [];
-    return firestoreProducts.filter((p) => p.sellerId === firebaseUser.uid);
-  }, [firestoreProducts, firebaseUser]);
+    if (!authUser) return [];
+    return dbProducts.filter((p) => p.sellerId === authUser.id);
+  }, [dbProducts, authUser]);
 
   const relatedProducts = useMemo(() => {
     if (!selectedProduct) return [];
@@ -170,7 +217,7 @@ export default function App() {
     setSelectedProductId(null);
     setAuthPromptReason(null);
     setPendingAction(null);
-    if (tab === 'sell' && !firebaseUser) {
+    if (tab === 'sell' && !authUser) {
       setAuthPromptReason('상품을 등록하려면 먼저 재학생 로그인을 해주세요');
       setPendingAction({ type: 'sell' });
     }
@@ -184,25 +231,25 @@ export default function App() {
   };
 
   const ensureProfileReady = async (): Promise<UserProfile | null> => {
-    if (!firebaseUser) return null;
+    if (!authUser) return null;
     if (userProfile) return userProfile;
-    const fetched = await fetchUserProfile(firebaseUser.uid);
+    const fetched = await fetchUserProfile(authUser.id);
     if (fetched) {
       setUserProfile(fetched);
       return fetched;
     }
-    const created = await createUserProfile(firebaseUser.uid, {
-      nickname: firebaseUser.displayName || '캠퍼스학우',
-      university: selectedCampus,
-      department: '컴퓨터공학과 24학번',
-      avatarUrl: firebaseUser.photoURL || undefined,
+    const meta = authUser.user_metadata || {};
+    const created = await upsertUserProfile(authUser.id, {
+      nickname: meta.nickname || authUser.email?.split('@')[0] || '캠퍼스학우',
+      university: meta.university || selectedCampus,
+      department: meta.department || '컴퓨터공학과 24학번',
     });
     setUserProfile(created);
     return created;
   };
 
   const handleToggleLike = async (product: ProductItem) => {
-    if (!firebaseUser) {
+    if (!authUser) {
       setPendingAction({ type: 'like', product });
       setAuthPromptReason('관심 상품을 찜하려면 먼저 로그인해 주세요');
       setSelectedProductId(null);
@@ -213,7 +260,8 @@ export default function App() {
 
     const currentlyLiked = likedProductIds.has(product.id);
     try {
-      const nowLiked = await toggleUserWishlist(firebaseUser.uid, product, currentlyLiked);
+      const nowLiked = await toggleUserWishlist(authUser.id, product, currentlyLiked);
+      await refreshAllData(authUser.id);
       showToast(nowLiked ? '찜한 상품에 추가되었습니다!' : '찜 목록에서 해제되었습니다.');
     } catch {
       showToast('찜 상태 저장 중 오류가 발생했습니다.', 'error');
@@ -221,7 +269,7 @@ export default function App() {
   };
 
   const handleRemoveWishlist = async (wishlist: WishlistRecord) => {
-    if (!firebaseUser) return;
+    if (!authUser) return;
     const matched = allProducts.find((p) => p.id === wishlist.productId) || {
       id: wishlist.productId,
       isSample: wishlist.isSample,
@@ -247,7 +295,8 @@ export default function App() {
     };
 
     try {
-      await toggleUserWishlist(firebaseUser.uid, matched, true);
+      await toggleUserWishlist(authUser.id, matched, true);
+      await refreshAllData(authUser.id);
       showToast('찜 목록에서 해제되었습니다.');
     } catch {
       showToast('찜 해제 중 오류가 발생했습니다.', 'error');
@@ -255,7 +304,7 @@ export default function App() {
   };
 
   const handleOpenMeetup = (product: ProductItem) => {
-    if (!firebaseUser) {
+    if (!authUser) {
       setPendingAction({ type: 'meetup', product });
       setAuthPromptReason('직거래 약속을 제안하려면 먼저 로그인해 주세요');
       setSelectedProductId(null);
@@ -271,16 +320,19 @@ export default function App() {
     preferredTime: string;
     note: string;
   }) => {
-    if (!meetupTarget || !firebaseUser) return;
+    if (!meetupTarget || !authUser) return;
     const profile = await ensureProfileReady();
     if (!profile) return;
 
     try {
-      await createMeetupProposal(profile, meetupTarget, payload);
+      const created = await createMeetupProposal(profile, meetupTarget, payload);
+      setMeetupRequests((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
       setMeetupTarget(null);
+      void refreshAllData(authUser.id);
       showToast('직거래 약속 요청이 전송되었습니다!');
-    } catch {
-      showToast('약속 요청 전송 중 오류가 발생했습니다.', 'error');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '약속 요청 전송 중 오류가 발생했습니다.';
+      showToast(msg, 'error');
     }
   };
 
@@ -302,6 +354,7 @@ export default function App() {
     } else if (action?.type === 'like') {
       setActiveTab('home');
       await toggleUserWishlist(profile.uid, action.product, false).catch(() => undefined);
+      await refreshAllData(profile.uid);
       showToast('찜한 상품에 추가되었습니다!');
     } else {
       setActiveTab('mypage');
@@ -310,7 +363,8 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
+    setAuthUser(null);
     setUserProfile(null);
     setSelectedProductId(null);
     setActiveTab('home');
@@ -375,12 +429,14 @@ export default function App() {
             meetupRequests={meetupRequests}
           />
         ) : activeTab === 'sell' ? (
-          firebaseUser ? (
+          authUser ? (
             userProfile ? (
               <SellScreen
                 profile={userProfile}
                 onBack={() => handleSelectTab('home')}
-                onSuccess={() => {
+                onSuccess={(created) => {
+                  setDbProducts((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
+                  void refreshAllData(authUser.id);
                   setSelectedCategory('전체');
                   setSearchQuery('');
                   setSortBy('최신순');
@@ -403,7 +459,7 @@ export default function App() {
               onShowToast={showToast}
             />
           )
-        ) : firebaseUser ? (
+        ) : authUser ? (
           userProfile ? (
             <MyPageScreen
               profile={userProfile}
@@ -413,6 +469,11 @@ export default function App() {
               meetupRequests={meetupRequests}
               onSelectProduct={handleSelectProduct}
               onRemoveWishlist={handleRemoveWishlist}
+              onProfileUpdated={(updated) => {
+                setUserProfile(updated);
+                setSelectedCampus(updated.university);
+              }}
+              onRefreshData={() => void refreshAllData(authUser.id)}
               onGoSell={() => handleSelectTab('sell')}
               onLogout={handleLogout}
               onShowToast={showToast}
